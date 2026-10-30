@@ -1,156 +1,178 @@
-# Interface languages
+# UI localization
 
-Choose **Edit → Interface Language** and select **Auto (system language)**, **English**,
-**Українська**, **Português (Brasil)**, **Deutsch**, **Español**, **Čeština** (Czech), **Русский**, **Français**, **简体中文**, **Italiano**, **한국어** (Korean), **Svenska** (Swedish), **العربية** (Arabic), **Magyar** (Hungarian), **Türkçe** (Turkish), or **Ελληνικά** (Greek).
-The interface updates without restarting, including the native macOS menus.
-The choice is saved with the other interface preferences (`cadcraft.prefs`, beside the theme):
-eframe storage on the desktop, browser local storage on the web. Installations without a saved
-choice use Auto.
+SolidCraft embeds its translations and works offline. English, Arabic, Bosnian, Czech, Danish, German, English (UK), Spanish, French, Galician, Hebrew, Croatian, Italian,
+Japanese, Korean, Malay, Norwegian Bokmål, Dutch, Polish, Brazilian Portuguese, Russian, Serbian, Turkish, Ukrainian and Chinese are currently registered in `crates/ui-egui/src/i18n.rs`. Adding a language requires an
+embedded catalog and one registration there; the preferences selector and validation use the same
+registry.
 
-Auto uses the first supported language in the operating system's preferred locales, or the
-browser's `navigator.languages` on the web. BCP 47 and POSIX tags select their primary language:
-`uk-UA` → `uk`, `de_AT.UTF-8` → `de`, `es-MX` → `es`, `pt_BR.UTF-8` → `pt-BR`,
-`cs-CZ` and `cs_CZ.UTF-8` → `cs`, `it-IT` and `it_CH.UTF-8` → `it`, `ko-KR` and `ko_KR.UTF-8` → `ko`,
-`sv-SE`, `sv-FI` and `sv_SE.UTF-8` → `sv`, `hu-HU` and `hu_HU.UTF-8` → `hu`, `tr-TR` and `tr_TR.UTF-8` → `tr`. Unsupported languages fall back to English.
-Set `CADCRAFT_LOCALE=cs-CZ` to override the desktop's locale for a launch.
-An explicit saved language choice takes precedence over that override.
+## Messages
 
-Automation can select the language through the existing control channel:
+`assets/locales/en.json` defines stable message IDs and English fallback text.
+Keep IDs when changing wording. Other catalogs use the same IDs; missing messages fall back
+to English. Use `app.tr("ui.preferences")` for static messages and
+`Locale::format` for full sentences with named placeholders. Translate the entire sentence,
+including punctuation, so a translator can reorder its arguments. Placeholder values are
+inserted literally, even if a document name contains braces.
 
-```json
-{"id":1,"method":"engine.execute","params":{"command":"ui.language","params":{"lang":"cs"}}}
-```
+The English-label adapter (`app.tr_label`) supports existing engine and UI tables. It maps
+display text to a message ID, then uses the same catalog lookup. New UI messages should use
+stable IDs directly. The adapter does not change command IDs, model names, or scenario handles.
+When a table's English wording changes, update the corresponding English catalog entry too.
+Generated browser labels use named templates while their underlying model names stay intact.
 
-The `ui.set` method also accepts `{"interfaceLanguage":"cs"}`. Supported values are `auto`,
-`en`, `uk`, `pt-BR`, `de`, `es`, `cs`, `ru`, `fr`, `zh`, `it`, `ko`, `sv`, `ar`, `hu`, `tr`, and `el`; invalid values are rejected without changing the current
-selection. Resetting palettes keeps the language choice.
+Catalogs are parsed once and looked up through ordered maps. This is offline localization,
+not a claim of zero runtime overhead. The catalog tests check registered locale IDs,
+translation keys, and placeholder consistency. Run `cargo xtask ci` before submitting changes.
 
-## Translation coverage
+## Terms
 
-The catalogs cover command and menu labels, tool groups and tooltips, the Start page,
-file and model-space tabs, status controls, object snaps, drafting prompts, property labels,
-dialogs, and the About window's controls. The command reference can be searched by English
-command ID, English label, or translated label. A missing entry falls back to English and
-never fails a build; `cargo xtask i18n` (a step of `cargo xtask ci`) lists each language's.
+The [glossary](book/src/reference/glossary.md) gives one English term for each idea, and each
+entry has a note for translators: what the term must not be confused with. Its "Words with more
+than one meaning" table lists the English words that need a separate catalogue entry for each
+meaning (Construction, Flat, Round, Normal, Gap, Clearance).
 
-Czech has 1,202 catalog rows, covering the reference catalog and every marked UI
-literal, including Options. Four `menu` entries distinguish menu headings from object/command
-labels: **Zobrazení / Pohled**, **Kreslení / Kreslit**, **Kótování / Kóta**, and **Modifikace / Upravit**.
-The translation is AI-assisted work by @Losminek, reviewed against Czech desktop and CAD UI
-conventions and an independent review pass; it has not yet been proofread by a native speaker.
+## English (UK)
 
-Korean has **1,235 rows**: 1,229 ordinary labels, four contextual menu headings, and
-two single-form count templates. It covers the union of the existing catalogs, including
-the Ukrainian reference, the current Czech catalog, Options, prompts, dialogs, and tooltips.
-The translations are original, AI-assisted Korean CAD terminology (for example, 도면층,
-치수, 모깎기, 모따기, 간격띄우기 and 객체 스냅). Independent native proofreading and
-platform-specific layout/IME validation remain follow-up work.
+`en-GB.json` holds only the English messages whose spelling differs in UK English (Centre,
+Customise, Organisation, Licence, colours, …); every other message falls back to English. When an
+English message with a US spelling is added, add its UK spelling there too.
 
-Brazilian Portuguese has 1,231 catalog rows and also covers the reference catalog and every marked UI
-literal: commands, menus, tool groups and tooltips, object snaps, drafting prompts, dialogs and
-Preferences; its gaps are now zero. Its plural rule is `one|other` (0 and 1 are `one`), as CLDR defines
-for `pt`, and the catalog's accented letters (`Á Â Í Ó Ú à á â ã ç é ê í ó ô õ ú`) render in the
-bundled fonts. The original catalog was contributed by @WladmirJunior; the remaining rows were completed
-by @RicSchonfelder with AI assistance. A native-speaker terminology pass by @ffishman (2026-10-19) fixed
-mistranslations (Thaw Layer, Snap type, Revolve) and made the CAD vocabulary consistent with Brazilian
-usage: *snap* for every snap mode, *viewport*, *grip* and *offset* kept as loanwords (Brazilian university
-AutoCAD handouts keep these names in English), *Ligar/Desligar camada*, *Explodir*, *Multilinha*.
+## Coverage
 
-Hungarian has **1,326 rows**: 1,320 ordinary labels, four contextual menu headings, and two
-single-form count templates. It covers the reference catalog and every marked UI literal,
-including Options, prompts, dialogs, and tooltips; only **Méretezés / Méret** (Dimension) differs
-between the menu heading and the object label. The interface addresses the user informally, and
-a count takes one form because a Hungarian numeral is followed by the singular. The translation
-was written from the meaning of CADCraft's English strings; no other product's localization was
-used as a source. It has not yet been proofread by an independent native speaker.
+A message a locale never received falls back to English silently, so a gap shows up only as a row
+that looks untranslated. Two guards catch that in the build:
 
-Turkish has **1,330 rows**: the union of the existing catalogs, four contextual menu headings
-(**Ölçülendirme** for the Dimension menu, **Ölçü** for the object) and two single-form count
-templates, since a Turkish noun stays singular after a number ("3 commit"). No marked UI literal
-falls back to English. Prompts read "… girin" for Enter and "… belirtin" for Specify, and clickable
-keywords (`Top`, `Zero`, `Bottom`, `_tan to`, `nX`/`nXP`) keep the spelling the engine accepts.
-The translation is original, AI-assisted work by @ogzhnklvz, written from the English strings with
-Turkish desktop-CAD vocabulary (Katman, Tarama, Yuvarlatma, Pah, Öteleme, Nesne Kenetleme,
-Görünüm Penceresi); the running app was reviewed by a native speaker, and line-by-line
-proofreading is still to do. The bundled
-egui fonts cover `Ç Ğ İ Ö Ş Ü ç ğ ı ö ş ü`.
+- `every_complete_catalog_carries_every_english_message` — adding a key to `en.json`
+  without giving it to a complete catalog fails the tests. English is the source catalog,
+  Arabic, Hebrew, Japanese and Chinese are delivered complete; Bosnian, Croatian and Serbian carry
+  every English message today but are not held to it, so a new label may follow later in them; Danish, German, Spanish, Galician, Italian, Korean, Malay, Norwegian Bokmål, Polish, Brazilian Portuguese, Russian, French, Ukrainian and
+  Turkish are partial — their gaps fall back to English and are reported by `cargo xtask i18n` without
+  failing the build. A new label needs en, ar, he, ja, zh, de and ko; Russian, French, Ukrainian and Malay may
+  follow later.
+- `every_toolbar_tab_and_panel_is_in_the_english_catalog` — tabs and panels reach the UI as bare
+  source strings, resolved only by the English-label adapter, so a heading missing from `en.json`
+  can never translate.
 
-Drawing titles, layer/layout/block/style names, parameter names and expressions, text in a
-drawing, and command-line input are user data and retain their original spelling. Clickable
-command keywords retain their English spelling so the text shown matches the input accepted
-by the engine. CLI/MCP/control responses, engine diagnostics and command history remain
-English. Uncatalogued text also falls back to English. Number formatting and the operating
-system's own file-picker controls follow the existing behavior.
+Command labels are the same case on a larger scale: every label in the engine's registry now has
+an entry under `cmd.<command id>`, and `every_command_label_is_in_the_english_catalog` fails if a
+command is added without one.
 
-The bundled egui fonts cover Ukrainian (`Ґґ Єє Іі Її`), German (`ÄÖÜ äöü ß`), Czech
-(`ÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ áčďéěíňóřšťúůýž`, including typographic quotes `„…“`), and Hungarian
-(`ÁÉÍÓÖŐÚÜŰ áéíóöőúüű`, including `„…”`).
-The translations add no font assets and work on the web without system fonts.
+The context menu and the browser are the same case again, and they carry the most labels of all:
+`every_menu_label_is_in_the_english_catalog` opens every menu the app can reach, flips the state
+each conditional label branches on (origin shown, bodies locked, bodies hidden) so both branches
+are seen, and fails on any label the catalog has never seen. Unit symbols are left out of the
+sweep: `mm` is `mm` in every language, so they are not prose to translate. The sweep also asserts
+it keeps reaching a broad set of labels, so it cannot pass by finding nothing.
 
-Korean needs a font that covers **every Hangul character in its catalog** and the language
-picker label. The CJK font loaded in every language (Noto Sans CJK, Microsoft YaHei, PingFang)
-usually covers Hangul already, and then nothing more is loaded. Otherwise, only when Korean is
-chosen, desktop builds look for a `Hang`/`Kore` face from the optional `CRAFT_FONTS_DIR` input,
-then installed fonts: Malgun Gothic/Gulim on Windows, Apple SD Gothic Neo/AppleGothic on macOS,
-and Nanum Gothic or Noto CJK on Linux/FreeBSD. Collection faces are checked individually, and
-file reads/face scans are bounded. No system fonts or new font assets are redistributed.
+`cargo xtask i18n` prints the same picture across every locale — which messages each one is
+missing and which command labels English cannot translate. `--check` turns it into a non-zero exit
+for CI. `--add-missing` writes each uncovered label into `en.json` under `cmd.<command id>`, with
+the English label as its text, so the label adapter can find it and only the translations are left
+to do. One key per distinct label: two commands that share a label (`Trim`, `Extend`) must not both
+claim it, or the English-text lookup would silently pick one.
 
-Web builds cannot read installed fonts and embed no Korean face (to stay within hosting size
-limits), so the web interface stays English when Korean is chosen. Without a font covering the
-catalog, the saved `ko` preference is kept but the interface falls back to English; the language
-command reports that a font is needed, and the picker uses the readable label **Korean** wherever
-Hangul can't be shown. This change does not fix platform IME issues or localize engine output.
+## Rendering and coverage
 
-## Greek (`el`) interface
+The Italian catalog uses original translations of SolidCraft's English messages, not text
+extracted from commercial CAD software. Its core terminology is Schizzo (Sketch),
+Estrusione (Extrude), Raccordo (Fillet), Smusso (Chamfer), Corpo (Body), Componente
+(Component) and Vincolo (Constraint). Draft geometry is Sformo, while a report draft
+is Bozza; Counterbore is Lamatura and Countersink is Svasatura. Established technical
+terms such as Loft, Sweep, Spline and Offset remain unchanged. Command IDs, shortcuts,
+file formats, units and user-provided names are not translated.
 
-The Greek translation covers all **1,330** distinct source keys collected from the existing
-language catalogs: **1,324** ordinary interface labels, **4** contextual menu headings and
-**2** integer-count templates. The interface can be selected as **Ελληνικά** under
-Edit → Interface Language, or automatically when the system language is `el-GR` or `el-CY`.
-Greek integer plurals distinguish 1 from all other counts.
+The Bosnian (`bs`, Bosanski), Croatian (`hr`, Hrvatski) and Serbian (`sr`, Српски) catalogs are
+original translations kept in step: Bosnian and Croatian are ijekavian in Latin script, Serbian is
+ekavian in Cyrillic. They share Skica (Sketch), Ograničenje (Constraint), Kota (Dimension),
+Ekstrudiraj (Extrude), Zaobljenje (Fillet), Skošenje (Chamfer), Niz (Pattern) and Spoj (Joint), and
+follow each standard where it differs: Tijelo/Tijelo/Telo (Body), Ravan/Ravnina/Ravan (Plane),
+Tačka/Točka/Tačka (Point), Ivica/Brid/Ivica (Edge), Ugao/Kut/Ugao (Angle), Rupa/Provrt/Rupa (Hole),
+Sačuvaj/Spremi/Sačuvaj (Save). A timeline feature is Operacija in Bosnian and Serbian and Značajka in
+Croatian; the Browser panel is Stablo modela, so it is never confused with a web browser
+(preglednik/pregledač); the undo history is Historija/Povijest/Istorija and the timeline Vremenska
+traka. In Serbian, brand and file names, acronyms, units, key names and placeholders stay in Latin
+script inside the Cyrillic text. Command IDs, shortcuts, file formats, units and user-provided names
+are not translated.
 
-The terminology follows native Greek CAD vocabulary; specialist terms retain the English
-name in parentheses when it helps professionals match a known CAD command (for example,
-**Επίπεδο (Layer)**, **Πολυγραμμή (Polyline)** and **Διαγράμμιση (Hatch)**).
-Common actions such as Open and Save appear simply in Greek. Existing command identifiers,
-drawing content, names of user objects and file formats remain unchanged. The translation is
-original AI-assisted work contributed by @Camthalion77 with language review; it is not sourced
-from Autodesk localization files. Independent native proofreading and visual checks remain
-follow-up work.
+The Norwegian Bokmål catalog (`nb`, shown as Norsk bokmål) uses Skisse (Sketch),
+Kropp (Body), Funksjon (timeline Feature), Binding (Constraint), Avrunding (Fillet)
+and Fas (Chamfer). Ground/Unground are Fest posisjon/Frigjør posisjon, Draft is
+Slippvinkel, Flat Pattern is Utbretting, and Counterbore/Countersink are Sylindrisk
+forsenkning/Konisk forsenkning. Capture Position is Registrer posisjon, while
+sketch snapping is Punktfangst. Loft, Sweep, Spline and Offset remain technical
+terms. Command IDs, shortcuts, file formats, units and user-provided names stay
+unchanged.
 
-## Adding translations
+One immutable `Locale` type handles all translations. Table widgets without an app reference
+use a render scope that restores the previous locale when it exits, including nested renders.
+Standalone translated panels enter the same scope. Measure rendered text to size custom
+widgets; UTF-8 byte lengths do not describe their displayed width.
 
-The implementation follows the display-time catalog pattern used by
-[VectorCraft #205](https://github.com/storytold/vectorcraft/pull/205),
-[PdfCraft #106](https://github.com/storytold/pdfcraft/pull/106), and
-[FilmCraft #238](https://github.com/storytold/filmcraft/pull/238). Its code is local to CADCraft.
+The desktop host tries system CJK fonts across Windows, macOS and Linux, the Flatpak host font
+folders (`/run/host/fonts`, `/run/host/user-fonts`), the folders listed in `SOLIDCRAFT_FONT_DIRS`
+and an optional `CRAFT_FONTS_DIR` font pack, and skips files that cannot be parsed. Chinese uses its own fallback
+chain after the general CJK font: many Japanese CJK fonts (Hiragino Gothic, Meiryo, Yu Gothic)
+match the CJK font search but lack simplified characters, so a second fallback found by the
+Chinese font-name list (`PingFang`, `Microsoft YaHei`, `Noto Sans CJK SC`, …) covers them per
+glyph. No fonts are redistributed in native desktop distribution packages; native builds rely
+entirely on existing operating system fonts or craft-fonts.
 
-- `crates/ui-egui/src/i18n/*.tsv` are UTF-8 with three tab-separated columns:
-  `context`, `English source`, and `translation`. Ordinary labels have an empty context.
-  Optional `menu` entries translate menu headings via `i18n::menu` / `i18n::tr_menu`;
-  without one, the ordinary translation is used.
-- `@plural` entries hold the language's forms for integer counts: Ukrainian `one|few|many`,
-  German and Spanish `one|other`, Brazilian Portuguese `one|other` (0 and 1 are `one`),
-  Czech `one|few|other` (1; 2–4; everything else, including 0, 11, 21 and 22).
-  Korean and Hungarian have one form (`other`) for all integer counts.
-  The API takes `u64`, so fractional counts are not accepted.
-- Register a new catalog in `i18n::LANGUAGES`, add its preference variant and code/name,
-  and set its integer plural rule and form count on the `Language` row.
-- Use `crate::tl!("English label")` for a literal, `i18n::t(label)` for a known dynamic UI
-  label, and `crate::tf!("Version {version}", version = value)` for named placeholders.
-  Translate only at the display boundary; never look up arbitrary user names or identifiers.
-- Windows retain explicit IDs based on their English source, and tool groups retain their
-  source names as keys, so switching languages preserves their state.
-- Add a translation attribution row in `ATTRIBUTION.md`, update the language lists, and add
-  the language's locale tags and plural rule. The rendering, font-glyph and live-switch tests
-  run for every catalog; no test checks one language's wording, and adding a command needs
-  only its English label.
-- Catalogs are embedded and parsed once. Missing or malformed rows cannot crash the app;
-  tests reject invalid rows, duplicate keys, changed placeholders, and mismatched ellipses.
-- `cargo test -p cadcraft-ui-egui i18n` checks the catalogs, locale resolution, preferences,
-  integer plurals, bundled glyphs and actual egui renders with language switching.
-  `cargo xtask i18n` prints the strings each language shows in English. `cargo xtask assets` checks asset attribution;
-  `cargo xtask ci` runs the workspace quality gates.
+In the browser, `solidcraft-web` ships self-hosted script fonts (SIL OFL 1.1) in the web distribution
+artifacts only, loaded asynchronously from the same origin without contacting any external CDNs or
+third-party servers:
 
-Translations are original work under `MIT OR Apache-2.0`, written from the meaning of
-CADCraft's English strings. Do not copy proprietary localization resources.
+- Japanese (and Hangul-less Korean UI for now): `./fonts/BIZUDPGothic-Regular.ttf`
+- Simplified Chinese (`zh`): `./fonts/CraftUI-SC.otf` (a locale-glyph subset of Noto Sans SC, renamed
+  under the OFL so it does not use the reserved name Noto)
+- Traditional Chinese (`zh-TW`): `./fonts/CraftUI-TC.otf` (same for Noto Sans TC)
+
+A CJK interface language fetches the matching face on demand. With any other interface language, the
+first time Japanese text (kana, kanji or full-width forms in a design name, file name, body name or
+typed text) is drawn, the Japanese face is fetched (#720). A session that never shows such text
+downloads no script font. If the needed face fails to load, the web interface shows English for that
+session only to prevent missing glyphs (tofu); the saved language preference is kept, so the next
+visit tries again. Korean Hangul coverage on the web remains follow-up work.
+
+## Right-to-left text
+
+egui 0.36 shapes each run of one font with harfrust, so a run of Hebrew letters is drawn right to
+left, but it has no bidirectional layout: the runs of a line (words, spaces, numbers, punctuation)
+are placed left to right in the order they are stored. A Hebrew sentence stored in reading order
+would show its words in the wrong order and its punctuation on the wrong side. `crate::bidi` runs
+the Unicode Bidirectional Algorithm (the `unicode-bidi` crate, UAX #9) over every message of a
+catalog that has right-to-left text, once, when the catalog is first used, and `Locale::text`
+returns the order egui needs: the runs of the line in display order, brackets inside
+right-to-left text mirrored, and the letters of each Hebrew run left in reading order for the
+shaper to reverse. Each line is its own paragraph and takes its direction from its first strong
+letter, so English fallback text is unchanged. `hebrew_messages_land_on_screen_in_display_order`
+lays messages out with a real Hebrew font and checks where the glyphs land.
+
+Arabic takes the same path. Its letters join, which the shaper does from the font's own tables, so
+each Arabic word is one run: the Arabic font comes after the Latin interface font, which keeps the
+spaces, digits and Latin text, and it is the first fallback for an Arabic UI (Segoe UI, Tahoma or
+Arial on Windows; SF Arabic, Geeza Pro, Damascus or Tahoma on macOS; Noto Sans or Naskh Arabic,
+KACST One or DejaVu Sans on Linux; `NotoSansArabic-Regular.ttf` in `CRAFT_FONTS_DIR`). Write Arabic
+messages with Western digits, which keep their left-to-right order inside the sentence.
+`arabic_messages_land_on_screen_in_display_order` checks the word order on screen.
+
+Placeholders are kept whole where they stand, so `format` substitutes values into the
+display-order text and a value keeps the order it has: a number, a file name, a label that is
+already in display order. Translators write normal Hebrew in reading order; they never add
+directional marks. When a prefix letter joins a Latin word or a placeholder, use the maqaf
+(`ב־{name}`, `ל־STEP`), which is a Hebrew letter to the algorithm, not an ASCII hyphen.
+
+This relies on Hebrew letters and the spaces and punctuation between them coming from different
+fonts (the bundled IBM Plex Sans has no Hebrew), which is how the default fonts are set up; an
+interface font that covers both Hebrew and Latin puts a whole line in one run and can reverse it.
+What this does not do yet: the layout is not mirrored (the browser stays on the left, labels stay
+left-aligned), and a message egui wraps onto several lines keeps the order of the whole string, so
+its lines read bottom to top. Names people type in Hebrew are shown as stored. The desktop host
+appends a system Hebrew font (Arial Hebrew or SF Hebrew on macOS, Segoe UI or Arial on Windows,
+Noto Sans Hebrew or DejaVu Sans on Linux); the web build has no Hebrew font yet, so a Hebrew
+interface shows empty boxes there.
+
+The current messages support named substitution, not locale-specific plural selection,
+number/date formatting, right-to-left layout mirroring, or shaping for joining scripts such as Arabic. Add those capabilities when
+introducing messages or languages that need them; use an established message formatter for
+plural rules instead of adding language branches to panels. The catalogs cover the UI surfaces
+introduced by this PR, not every engine error or every newer command dialog.

@@ -1,5 +1,7 @@
 //! Dependency layering rules (plan/architecture.md §3).
 //!
+//! Adapted from CADCraft's xtask (MIT OR Apache-2.0), see ATTRIBUTION.md.
+//!
 //! The rule engine works on a small, metadata-independent model so it can be
 //! unit-tested; `from_metadata` builds that model from `cargo metadata`.
 
@@ -30,34 +32,37 @@ impl Class {
     }
 }
 
-/// The layering table. Names are package names without the `cadcraft-`
+/// The layering table. Names are package names without the `solidcraft-`
 /// prefix.
 pub const TABLE: &[(&str, Class)] = &[
     ("geom", Class::Layer(0)),
-    ("dxf", Class::Standalone),
-    ("dwg", Class::Standalone),
-    ("color", Class::Layer(0)),
-    ("doc", Class::Layer(1)),
-    ("constraints", Class::Layer(2)),
-    ("fonts", Class::Layer(2)),
-    ("render", Class::Layer(2)),
+    // 3D mouse descriptors and reports (no workspace dependencies; the apps read the device)
+    ("space-mouse", Class::Layer(0)),
+    // the derive macros (proc-macro, no workspace dependencies)
+    ("derive", Class::Standalone),
+    // the 3Dconnexion driver's client API on macOS (no workspace dependencies)
+    ("3dx-client", Class::Standalone),
+    ("sketch", Class::Layer(1)),
+    ("kernel", Class::Layer(1)),
+    ("render", Class::Layer(1)),
+    ("doc", Class::Layer(2)),
     ("io", Class::Layer(3)),
     ("engine", Class::Layer(4)),
     ("ui-egui", Class::Layer(5)),
+    ("gpu", Class::Layer(5)),
     ("mcp", Class::Layer(5)),
     ("testkit", Class::Testkit),
     // apps and tooling
-    ("cadcraft", Class::Exempt),
+    ("solidcraft", Class::Exempt),
     ("cli", Class::Exempt),
     ("web", Class::Exempt),
     ("xtask", Class::Exempt),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).
-/// The L0 foundation is a small chain: `raster` builds on `color` and
-/// `geom`, which the §3 diagram draws on one line. The GPU backend (`gpu`)
-/// reuses the CPU reference (`compose`) for LUTs and parity tests.
-pub const INTRA_LAYER_ORDER: &[&[&str]] = &[&["geom", "color"], &["fonts", "render"]];
+/// The viewport draws display plans the GPU crate evaluates and draws with its pipelines; the MCP
+/// server's tests draw screenshots with them.
+pub const INTRA_LAYER_ORDER: &[&[&str]] = &[&["gpu", "ui-egui"], &["gpu", "mcp"]];
 
 fn intra_layer_allowed(from: &str, to: &str) -> bool {
     let (from, to) = (short_name(from), short_name(to));
@@ -69,13 +74,13 @@ fn intra_layer_allowed(from: &str, to: &str) -> bool {
 
 /// External crates that constitute a UI toolkit / windowing dependency.
 /// Entries ending in `*` are prefixes.
-pub const UI_CRATES: &[&str] = &["craft-ui", "egui", "eframe", "egui-wgpu", "wgpu", "winit", "egui_kittest", "rfd", "bevy*"];
+pub const UI_CRATES: &[&str] = &["egui", "eframe", "egui-wgpu", "wgpu", "winit", "egui_kittest", "rfd", "bevy*"];
 
 /// First layer allowed to use UI crates.
 pub const UI_MIN_LAYER: u8 = 5;
 
 pub fn short_name(pkg: &str) -> &str {
-    pkg.strip_prefix("cadcraft-").unwrap_or(pkg)
+    pkg.strip_prefix("solidcraft-").unwrap_or(pkg)
 }
 
 pub fn classify(pkg: &str) -> Option<Class> {
@@ -117,7 +122,7 @@ pub enum Violation {
     Upward { krate: String, dep: String, from: u8, to: u8, kind: DepKind },
     StandaloneHasWorkspaceDep { krate: String, dep: String },
     TestkitAsNormalDep { krate: String },
-    UiBelowL6 { krate: String, dep: String, layer: u8 },
+    UiBelowL5 { krate: String, dep: String, layer: u8 },
 }
 
 impl std::fmt::Display for Violation {
@@ -133,10 +138,10 @@ impl std::fmt::Display for Violation {
                 write!(f, "{krate}: standalone crate must not depend on workspace crate {dep}")
             }
             Violation::TestkitAsNormalDep { krate } => {
-                write!(f, "{krate}: cadcraft-testkit may only be a dev-dependency")
+                write!(f, "{krate}: solidcraft-testkit may only be a dev-dependency")
             }
-            Violation::UiBelowL6 { krate, dep, layer } => {
-                write!(f, "{krate} (L{layer}) depends on UI crate `{dep}`; UI toolkits are only allowed in L6+")
+            Violation::UiBelowL5 { krate, dep, layer } => {
+                write!(f, "{krate} (L{layer}) depends on UI crate `{dep}`; UI toolkits are only allowed in L5+")
             }
         }
     }
@@ -170,7 +175,6 @@ pub fn check(crates: &[Crate]) -> Vec<Violation> {
                     Some(Class::Testkit) if d.kind != DepKind::Dev => {
                         out.push(Violation::TestkitAsNormalDep { krate: c.name.clone() });
                     }
-                    // Test support is allowed as a dev-dependency, regardless of its layer.
                     Some(Class::Testkit) => {}
                     Some(dc) => {
                         let to = dc.layer().unwrap_or(u8::MAX);
@@ -186,11 +190,11 @@ pub fn check(crates: &[Crate]) -> Vec<Violation> {
                     }
                 }
             } else if layer < UI_MIN_LAYER && is_ui_crate(&d.name) {
-                out.push(Violation::UiBelowL6 { krate: c.name.clone(), dep: d.name.clone(), layer });
+                out.push(Violation::UiBelowL5 { krate: c.name.clone(), dep: d.name.clone(), layer });
             }
         }
     }
-    out.sort_by_key(ToString::to_string);
+    out.sort_by_key(|v| v.to_string());
     out.dedup();
     out
 }
@@ -241,74 +245,67 @@ mod tests {
     #[test]
     fn clean_downward_graph_passes() {
         let g = [
-            c("cadcraft-geom", &[("kurbo", Normal, false)]),
-            c("cadcraft-doc", &[("cadcraft-geom", Normal, true)]),
-            c("cadcraft-engine", &[("cadcraft-doc", Normal, true), ("cadcraft-testkit", Dev, true)]),
-            c("cadcraft-ui-egui", &[("cadcraft-engine", Normal, true), ("egui", Normal, false)]),
-            c("cadcraft-cli", &[("cadcraft-ui-egui", Normal, true)]),
+            c("solidcraft-geom", &[("kurbo", Normal, false)]),
+            c("solidcraft-doc", &[("solidcraft-geom", Normal, true)]),
+            c("solidcraft-engine", &[("solidcraft-doc", Normal, true), ("solidcraft-testkit", Dev, true)]),
+            c("solidcraft-ui-egui", &[("solidcraft-engine", Normal, true), ("egui", Normal, false)]),
+            c("solidcraft-cli", &[("solidcraft-ui-egui", Normal, true)]),
         ];
         assert!(check(&g).is_empty(), "{:?}", check(&g));
     }
 
     #[test]
     fn upward_dependency_flagged() {
-        let v = check(&[c("cadcraft-doc", &[("cadcraft-engine", Normal, true)])]);
-        assert!(matches!(v[..], [Violation::Upward { from: 1, to: 4, .. }]));
+        let v = check(&[c("solidcraft-doc", &[("solidcraft-engine", Normal, true)])]);
+        assert!(matches!(v[..], [Violation::Upward { from: 2, to: 4, .. }]));
     }
 
     #[test]
     fn sideways_dependency_flagged() {
-        let v = check(&[c("cadcraft-fonts", &[("cadcraft-render", Normal, true)])]);
-        assert!(matches!(v[..], [Violation::Upward { from: 2, to: 2, .. }]));
-    }
-
-    #[test]
-    fn l0_foundation_chain_allowed_one_way() {
-        assert!(check(&[c("cadcraft-color", &[("cadcraft-geom", Normal, true)])]).is_empty());
-        let v = check(&[c("cadcraft-geom", &[("cadcraft-color", Normal, true)])]);
-        assert!(matches!(v[..], [Violation::Upward { from: 0, to: 0, .. }]));
+        let v = check(&[c("solidcraft-kernel", &[("solidcraft-sketch", Normal, true)])]);
+        assert!(matches!(v[..], [Violation::Upward { from: 1, to: 1, .. }]));
     }
 
     #[test]
     fn self_dev_dependency_ignored() {
-        assert!(check(&[c("cadcraft-doc", &[("cadcraft-doc", Dev, true)])]).is_empty());
+        assert!(check(&[c("solidcraft-doc", &[("solidcraft-doc", Dev, true)])]).is_empty());
     }
 
     #[test]
     fn upward_dev_dependency_flagged() {
-        let v = check(&[c("cadcraft-geom", &[("cadcraft-doc", Dev, true)])]);
+        let v = check(&[c("solidcraft-geom", &[("solidcraft-doc", Dev, true)])]);
         assert!(matches!(v[..], [Violation::Upward { kind: Dev, .. }]));
     }
 
     #[test]
     fn ui_crates_below_l6_flagged() {
-        for dep in ["craft-ui", "egui", "eframe", "winit", "egui_kittest", "rfd", "bevy_ecs", "bevy"] {
-            let v = check(&[c("cadcraft-engine", &[(dep, Normal, false)])]);
-            assert!(matches!(v[..], [Violation::UiBelowL6 { layer: 4, .. }]), "{dep}");
+        for dep in ["egui", "eframe", "winit", "egui_kittest", "rfd", "bevy_ecs", "bevy"] {
+            let v = check(&[c("solidcraft-engine", &[(dep, Normal, false)])]);
+            assert!(matches!(v[..], [Violation::UiBelowL5 { layer: 4, .. }]), "{dep}");
         }
-        assert!(check(&[c("cadcraft-engine", &[("egui_extras_not", Normal, false)])]).is_empty());
-        assert!(check(&[c("cadcraft-mcp", &[("winit", Normal, false)])]).is_empty());
+        assert!(check(&[c("solidcraft-engine", &[("egui_extras_not", Normal, false)])]).is_empty());
+        assert!(check(&[c("solidcraft-ui-egui", &[("winit", Normal, false)])]).is_empty());
     }
 
     #[test]
     fn unregistered_crate_is_error() {
-        let v = check(&[c("cadcraft-mystery", &[])]);
-        assert!(matches!(&v[..], [Violation::Unregistered { krate }] if krate == "cadcraft-mystery"));
+        let v = check(&[c("solidcraft-mystery", &[])]);
+        assert!(matches!(&v[..], [Violation::Unregistered { krate }] if krate == "solidcraft-mystery"));
         assert!(v[0].to_string().contains("register"));
     }
 
     #[test]
     fn testkit_only_as_dev_dependency() {
-        let v = check(&[c("cadcraft-render", &[("cadcraft-testkit", Normal, true)])]);
+        let v = check(&[c("solidcraft-doc", &[("solidcraft-testkit", Normal, true)])]);
         assert!(matches!(v[..], [Violation::TestkitAsNormalDep { .. }]));
-        assert!(check(&[c("cadcraft-render", &[("cadcraft-testkit", Dev, true)])]).is_empty());
-        assert!(check(&[c("cadcraft-testkit", &[("cadcraft-engine", Normal, true)])]).is_empty());
+        assert!(check(&[c("solidcraft-doc", &[("solidcraft-testkit", Dev, true)])]).is_empty());
+        assert!(check(&[c("solidcraft-testkit", &[("solidcraft-engine", Normal, true)])]).is_empty());
     }
 
     #[test]
     fn apps_and_xtask_exempt() {
-        for app in ["cadcraft", "cadcraft-cli", "cadcraft-web", "xtask"] {
-            assert!(check(&[c(app, &[("egui", Normal, false), ("cadcraft-ui-egui", Normal, true)])]).is_empty());
+        for app in ["solidcraft", "solidcraft-cli", "xtask"] {
+            assert!(check(&[c(app, &[("egui", Normal, false), ("solidcraft-ui-egui", Normal, true)])]).is_empty());
         }
     }
 
@@ -316,17 +313,17 @@ mod tests {
     fn metadata_parsing() {
         let meta: Value = serde_json::from_str(
             r#"{"packages":[
-                {"name":"cadcraft-doc","dependencies":[
-                    {"name":"cadcraft-geom","kind":null,"path":"/x/crates/geom"},
+                {"name":"solidcraft-doc","dependencies":[
+                    {"name":"solidcraft-geom","kind":null,"path":"/x/crates/geom"},
                     {"name":"serde","kind":null},
                     {"name":"proptest","kind":"dev"}]},
-                {"name":"cadcraft-geom","dependencies":[]}
+                {"name":"solidcraft-geom","dependencies":[]}
             ]}"#,
         )
         .unwrap();
         let g = from_metadata(&meta).unwrap();
         assert_eq!(g.len(), 2);
-        let doc = g.iter().find(|c| c.name == "cadcraft-doc").unwrap();
+        let doc = g.iter().find(|c| c.name == "solidcraft-doc").unwrap();
         assert!(doc.deps[0].workspace && !doc.deps[1].workspace);
         assert_eq!(doc.deps[2].kind, Dev);
         assert!(check(&g).is_empty());

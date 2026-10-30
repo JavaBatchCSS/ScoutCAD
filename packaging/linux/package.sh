@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Build and package CADCraft for Linux (<arch> is x86_64 or aarch64, or riscv64 when cross-compiling):
+# Build and package SolidCraft for Linux (<arch> is x86_64 or aarch64):
 #
-#   $DIST/cadcraft-<version>-linux-<arch>.AppImage  any distro with glibc >= the build host's
-#   $DIST/cadcraft-<version>-linux-<arch>.AppImage.zsync  delta updates (needs zsyncmake)
-#   $DIST/cadcraft-<version>-linux-<arch>.deb       Debian, Ubuntu, Mint, Pop!_OS, ...
-#   $DIST/cadcraft-<version>-linux-<arch>.rpm       Fedora, openSUSE, RHEL, ...
-#   $DIST/cadcraft-<version>-linux-<arch>.tar.gz    plain FHS-style tree (bin/, share/)
+#   $DIST/solidcraft-<version>-linux-<arch>.AppImage        any distro with glibc >= the build host's
+#   $DIST/solidcraft-<version>-linux-<arch>.AppImage.zsync  delta updates (needs zsyncmake)
+#   $DIST/solvecraft-<version>-linux-<arch>.AppImage.zsync  the same, for pre-rename AppImages
+#   $DIST/solidcraft-<version>-linux-<arch>.deb             Debian, Ubuntu, Mint, Pop!_OS, ...
+#   $DIST/solidcraft-<version>-linux-<arch>.rpm             Fedora, openSUSE, RHEL, ...
+#   $DIST/solidcraft-<version>-linux-<arch>.tar.gz          plain FHS-style tree (bin/, share/)
 #
 # Usage: packaging/linux/package.sh [--skip-build] [--formats "appimage deb rpm tar"]
 #
@@ -13,25 +14,23 @@
 # (downloaded into $CARGO_TARGET_DIR if missing). Build on an old distro (CI: Ubuntu 22.04,
 # glibc 2.35) so the binaries run on newer ones. Optional: desktop-file-validate, appstreamcli,
 # zsyncmake (the zsync package) for the AppImage's .zsync.
+# Adapted from PhotoCraft's packaging (storytold/photocraft, Apache-2.0; see ATTRIBUTION.md).
 set -euo pipefail
 # shellcheck source=../env.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
 HERE="$ROOT/packaging/linux"
-APP_ID=ai.storyteller.cadcraft
 
 SKIP_BUILD=0
 FORMATS="appimage deb rpm tar"
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
   case "$1" in
     --skip-build) SKIP_BUILD=1; shift ;;
     --formats) FORMATS="$2"; shift 2 ;;
-    -h | --help) sed -n '2,17p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,16p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
-# Cross builds (CI's riscv64 job) set CROSS_ARCH, CROSS_TARGET (the Rust target), CROSS_COMPILE
-# (the binutils prefix, for strip) and optionally EMULATOR (e.g. qemu-riscv64, for the smoke test).
 ARCH="${CROSS_ARCH:-$(uname -m)}"
 case "$ARCH" in
   riscv64) DEB_ARCH=riscv64 ;;
@@ -39,61 +38,46 @@ case "$ARCH" in
   aarch64 | arm64) ARCH=aarch64; DEB_ARCH=arm64 ;;
   *) echo "unsupported architecture $ARCH" >&2; exit 2 ;;
 esac
-export CADCRAFT_MAINTAINER="${CADCRAFT_MAINTAINER:-CADCraft maintainers <cadcraft@storyteller.ai>}"
-BASENAME="cadcraft-$VERSION-linux-$ARCH"
+export SOLIDCRAFT_MAINTAINER="${SOLIDCRAFT_MAINTAINER:-${SOLVECRAFT_MAINTAINER:-SolidCraft contributors <https://github.com/bherbruck/solidcraft>}}"  # SOLVECRAFT_*: compatibility shim, see docs/compatibility.md
+BASENAME="solidcraft-$VERSION-linux-$ARCH"
 
-echo "==> CADCraft $VERSION for Linux $ARCH ($FORMATS)"
+echo "==> SolidCraft $VERSION for Linux $ARCH ($FORMATS)"
 
-# The man-and-completions example writes cadcraft-cli's man pages and shell completions below. It
-# is built in its own cargo run: built with the binaries, its dev-dependencies' features would be
-# unified into them.
-if [[ "$SKIP_BUILD" = 0 ]]; then
-  if [[ -n "${CROSS_TARGET:-}" ]]; then
-    (cd "$ROOT" && cargo build --release --locked -p cadcraft -p cadcraft-cli --target "$CROSS_TARGET")
-    (cd "$ROOT" && cargo build --release --locked -p cadcraft-cli --example man-and-completions --target "$CROSS_TARGET")
+if [ "$SKIP_BUILD" = 0 ]; then
+  if [ -n "${CROSS_TARGET:-}" ]; then
+    (cd "$ROOT" && cargo build --release --locked -p solidcraft -p solidcraft-cli --target "$CROSS_TARGET")
+    BIN="$CARGO_TARGET_DIR/$CROSS_TARGET/release"
   else
-    (cd "$ROOT" && cargo build --release --locked -p cadcraft -p cadcraft-cli)
-    (cd "$ROOT" && cargo build --release --locked -p cadcraft-cli --example man-and-completions)
+    (cd "$ROOT" && cargo build --release --locked -p solidcraft -p solidcraft-cli)
+    BIN="$CARGO_TARGET_DIR/release"
+  fi
+else
+  if [ -n "${CROSS_TARGET:-}" ]; then
+    BIN="$CARGO_TARGET_DIR/$CROSS_TARGET/release"
+  else
+    BIN="$CARGO_TARGET_DIR/release"
   fi
 fi
-BIN="$CARGO_TARGET_DIR/${CROSS_TARGET:+$CROSS_TARGET/}release"
 WORK="$CARGO_TARGET_DIR/linux-package"
 STAGE="$WORK/root"
 rm -rf "$WORK"
 
 # ---- stage an FHS tree (shared by every format) -------------------------------------------------
-install -Dm755 "$BIN/cadcraft" "$STAGE/usr/bin/cadcraft"
-install -Dm755 "$BIN/cadcraft-cli" "$STAGE/usr/bin/cadcraft-cli"
-"${CROSS_COMPILE:-}strip" "$STAGE/usr/bin/cadcraft" "$STAGE/usr/bin/cadcraft-cli" 2>/dev/null || true
-install -Dm644 "$HERE/$APP_ID.desktop" "$STAGE/usr/share/applications/$APP_ID.desktop"
-install -Dm644 "$HERE/$APP_ID.mime.xml" "$STAGE/usr/share/mime/packages/$APP_ID.xml"
+install -Dm755 "$BIN/solidcraft" "$STAGE/usr/bin/solidcraft"
+install -Dm755 "$BIN/solidcraft-cli" "$STAGE/usr/bin/solidcraft-cli"
+# Compatibility shim (docs/compatibility.md): the old CLI name forwards to solidcraft-cli.
+install -Dm755 "$BIN/solvecraft-cli" "$STAGE/usr/bin/solvecraft-cli"
+strip "$STAGE/usr/bin/solidcraft" "$STAGE/usr/bin/solidcraft-cli" "$STAGE/usr/bin/solvecraft-cli" 2>/dev/null || true
+install -Dm644 "$ROOT/assets/platforms/linux/$APP_ID.desktop" "$STAGE/usr/share/applications/$APP_ID.desktop"
+install -Dm644 "$ROOT/assets/platforms/linux/$APP_ID.mime.xml" "$STAGE/usr/share/mime/packages/$APP_ID.xml"
 mkdir -p "$STAGE/usr/share/metainfo"
-sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$CADCRAFT_BUILD_DATE/g" \
-  "$HERE/$APP_ID.metainfo.xml.in" >"$STAGE/usr/share/metainfo/$APP_ID.metainfo.xml"
+sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$SOLIDCRAFT_BUILD_DATE/g" \
+  "$ROOT/assets/platforms/linux/$APP_ID.metainfo.xml.in" >"$STAGE/usr/share/metainfo/$APP_ID.metainfo.xml"
+make_icons "$STAGE/usr/bin/solidcraft-cli" "$WORK/icons"
 mkdir -p "$STAGE/usr/share/icons"
-cp -R "$ROOT/assets/app-icon/hicolor" "$STAGE/usr/share/icons/"
-mkdir -p "$STAGE/usr/share/doc/cadcraft"
-copy_docs "$STAGE/usr/share/doc/cadcraft"
-# cadcraft-cli's man pages and shell completions, from its clap definition, written by the
-# example built above. A cross build runs it through $EMULATOR, like the --version check at the
-# end, and leaves them out without one, as a --skip-build run whose prebuilt binaries came without
-# the example does. zsh reads site-functions on Fedora and openSUSE.
-CLI_DOCS="$BIN/examples/man-and-completions"
-if [[ -n "${CROSS_TARGET:-}" ]] && [[ -z "${EMULATOR:-}" ]]; then
-  warn "no EMULATOR to run the $CROSS_TARGET build, so cadcraft-cli's man pages and completions are left out"
-elif [[ ! -x "$CLI_DOCS" ]]; then
-  warn "$CLI_DOCS is not built, so cadcraft-cli's man pages and completions are left out"
-else
-  if [[ -n "${CROSS_TARGET:-}" ]]; then
-    "$EMULATOR" "$CLI_DOCS" "$WORK/cli-docs"
-  else
-    "$CLI_DOCS" "$WORK/cli-docs"
-  fi
-  install -Dm644 -t "$STAGE/usr/share/man/man1" "$WORK"/cli-docs/*.1
-  install -Dm644 "$WORK/cli-docs/cadcraft-cli.bash" "$STAGE/usr/share/bash-completion/completions/cadcraft-cli"
-  install -Dm644 "$WORK/cli-docs/_cadcraft-cli" "$STAGE/usr/share/zsh/site-functions/_cadcraft-cli"
-  install -Dm644 "$WORK/cli-docs/cadcraft-cli.fish" "$STAGE/usr/share/fish/vendor_completions.d/cadcraft-cli.fish"
-fi
+cp -R "$WORK/icons/hicolor" "$STAGE/usr/share/icons/"
+mkdir -p "$STAGE/usr/share/doc/solidcraft"
+copy_docs "$STAGE/usr/share/doc/solidcraft"
 
 if command -v desktop-file-validate >/dev/null; then
   desktop-file-validate "$STAGE/usr/share/applications/$APP_ID.desktop"
@@ -102,7 +86,7 @@ if command -v appstreamcli >/dev/null; then
   appstreamcli validate --no-net --explain "$STAGE/usr/share/metainfo/$APP_ID.metainfo.xml"
 fi
 
-has() { local format="$1"; case " $FORMATS " in *" $format "*) return 0 ;; *) return 1 ;; esac; }
+has() { case " $FORMATS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 # ---- .tar.gz ------------------------------------------------------------------------------------
 if has tar; then
@@ -126,50 +110,51 @@ fi
 
 # ---- AppImage -----------------------------------------------------------------------------------
 if has appimage; then
-  APPDIR="$WORK/CADCraft.AppDir"
+  APPDIR="$WORK/SolidCraft.AppDir"
   cp -R "$STAGE" "$APPDIR"
-  ln -s usr/bin/cadcraft "$APPDIR/AppRun"
-  cp "$HERE/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
-  cp "$ROOT/assets/app-icon/hicolor/256x256/apps/$APP_ID.png" "$APPDIR/$APP_ID.png"
+  mv "$APPDIR/usr/share/doc" "$WORK/doc-unused"
+  # AppRun is a script, not a symlink: it installs the .desktop entry and icons into
+  # $XDG_DATA_HOME before launching, so Wayland compositors can resolve the window's app_id to
+  # our icon.
+  install -Dm755 "$HERE/AppRun" "$APPDIR/AppRun"
+  cp "$ROOT/assets/platforms/linux/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
+  cp "$WORK/icons/hicolor/256x256/apps/$APP_ID.png" "$APPDIR/$APP_ID.png"
   ln -s "$APP_ID.png" "$APPDIR/.DirIcon"
 
   TOOL="${APPIMAGETOOL:-$(command -v appimagetool || true)}"
-  if [[ -z "$TOOL" ]]; then
+  if [ -z "$TOOL" ]; then
     TOOL="$CARGO_TARGET_DIR/appimagetool-$ARCH.AppImage"
-    if [[ ! -x "$TOOL" ]]; then
-      curl --proto '=https' -fsSL -o "$TOOL" "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage"
+    if [ ! -x "$TOOL" ]; then
+      curl -fsSL -o "$TOOL" "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage"
       chmod +x "$TOOL"
     fi
   fi
-  # Absolute, because appimagetool runs in $DIST below (CARGO_TARGET_DIR or APPIMAGETOOL may be
-  # relative).
-  OUT="$(cd "$DIST" && pwd)/$BASENAME.AppImage"
+  OUT="$DIST/$BASENAME.AppImage"
   APPDIR="$(cd "$APPDIR" && pwd)"
   TOOL="$(cd "$(dirname "$TOOL")" && pwd)/$(basename "$TOOL")"
-  # A .zsync left by an earlier run would hide a missing zsyncmake and describe another file.
   rm -f "$OUT.zsync"
-  # Update information: AppImageUpdate, AppImageLauncher and the like read it from the file and
-  # fetch only the blocks that changed in a newer release, through the .zsync published next to
-  # each AppImage on GitHub Releases. `latest` is the newest published release that is not a
-  # pre-release. A fork's builds point at its own releases through GITHUB_REPOSITORY.
-  REPO="${GITHUB_REPOSITORY:-storytold/cadcraft}"
-  UPDATE_INFO="gh-releases-zsync|${REPO%%/*}|${REPO#*/}|latest|cadcraft-*-linux-$ARCH.AppImage.zsync"
-  # Extract-and-run: works without FUSE (containers, CI). The output embeds the static runtime,
-  # so users don't need libfuse2 either. With zsyncmake on the host (CI installs the zsync
-  # package) appimagetool also writes the .zsync, into its working directory, hence the cd.
+  # Update information: AppImageUpdate and the like fetch only the changed blocks of a newer
+  # release through the .zsync published next to each AppImage. `latest` is the newest published
+  # release that is not a pre-release.
+  REPO="${GITHUB_REPOSITORY:-bherbruck/solidcraft}"
+  UPDATE_INFO="gh-releases-zsync|${REPO%%/*}|${REPO#*/}|latest|solidcraft-*-linux-$ARCH.AppImage.zsync"
+  # Extract-and-run: works without FUSE (containers, CI). With zsyncmake on the host appimagetool
+  # also writes the .zsync, into its working directory, hence the cd.
   (cd "$DIST" && ARCH="$ARCH" APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" --no-appstream -u "$UPDATE_INFO" "$APPDIR" "$OUT")
   echo "wrote $OUT"
-  if [[ -s "$OUT.zsync" ]]; then
+  if [ -s "$OUT.zsync" ]; then
     echo "wrote $OUT.zsync"
+    # Compatibility shim (docs/compatibility.md): AppImages from before the rename look for
+    # `solvecraft-*-linux-$ARCH.AppImage.zsync` in the latest release. The same .zsync under that
+    # name (its URL is the new AppImage's file name, relative to the release) updates them to
+    # SolidCraft.
+    cp "$OUT.zsync" "$DIST/solvecraft-$VERSION-linux-$ARCH.AppImage.zsync"
+    echo "wrote $DIST/solvecraft-$VERSION-linux-$ARCH.AppImage.zsync (legacy update alias)"
   else
     warn "zsyncmake not found, so $OUT.zsync was not written; AppImage delta updates need it"
   fi
 fi
 
-if [[ -z "${CROSS_TARGET:-}" ]]; then
-  "$STAGE/usr/bin/cadcraft-cli" --version
-elif [[ -n "${EMULATOR:-}" ]]; then
-  "$EMULATOR" "$STAGE/usr/bin/cadcraft-cli" --version
-fi
+"$STAGE/usr/bin/solidcraft-cli" --version
 echo "==> done"
 ls -lh "$DIST"

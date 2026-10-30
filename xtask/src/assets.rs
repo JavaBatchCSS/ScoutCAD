@@ -1,43 +1,95 @@
-//! `cargo xtask assets`: every non-code asset must be attributed in `ATTRIBUTION.md`.
-//!
-//! Scans all git-tracked (and untracked, not ignored) files with an asset extension, plus
-//! everything under `assets/`, `docs/images/` and `examples/`, and fails if a path is not listed
-//! as `` `path` `` in ATTRIBUTION.md. See the asset policy in AGENTS.md.
-
+//! Asset provenance gate. ATTRIBUTION.md is the single inventory of collected files.
+use std::collections::BTreeSet;
 use std::path::Path;
-use std::process::Command;
 
 const ASSET_EXT: &[&str] = &[
-    "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "ico", "icns", "svg", "pdf", "ai", "eps", "psd", "icc", "icm", "ttf", "otf", "woff",
-    "woff2", "ase", "indd", "idml", "aco", "abr", "dxf", "dwg", "mp4", "wav", "mp3",
+    "png",
+    "jpg",
+    "jpeg",
+    "svg",
+    "ico",
+    "icns",
+    "car",
+    "vectorcraft",
+    "ai",
+    "psd",
+    "afdesign",
+    "fig",
+    "sketch",
+    "ttf",
+    "otf",
+    "woff",
+    "woff2",
+    "gif",
+    "bmp",
+    "webp",
+    "wav",
+    "mp3",
+    "mp4",
+    "stl",
+    "step",
+    "stp",
+    "obj",
+    "fcstd",
+    "3dm",
 ];
-const ASSET_DIRS: &[&str] = &["assets/", "docs/images/", "examples/"];
 
-pub fn is_asset(path: &str) -> bool {
-    let ext = Path::new(path).extension().and_then(std::ffi::OsStr::to_str).map(str::to_ascii_lowercase).unwrap_or_default();
-    ASSET_DIRS.iter().any(|d| path.starts_with(d)) || ASSET_EXT.contains(&ext.as_str())
+fn walk(dir: &Path, root: &Path, out: &mut Vec<String>) -> Result<(), String> {
+    for e in std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))? {
+        let e = e.map_err(|e| e.to_string())?;
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') || name.starts_with("target") || matches!(name.as_str(), "plan" | "dist" | "node_modules" | "corpus") {
+            continue;
+        }
+        let p = e.path();
+        let kind = e.file_type().map_err(|e| e.to_string())?;
+        if kind.is_symlink() {
+            if p.starts_with(root.join("assets")) {
+                return Err(format!("resource symlink: {}", p.display()));
+            }
+        } else if kind.is_dir() {
+            walk(&p, root, out)?;
+        } else if kind.is_file() {
+            out.push(p.strip_prefix(root).map_err(|e| e.to_string())?.to_string_lossy().replace('\\', "/"));
+        }
+    }
+    Ok(())
 }
 
-/// Paths that need an ATTRIBUTION.md entry but lack one.
-pub fn missing(files: &[String], assets_md: &str) -> Vec<String> {
-    files.iter().filter(|f| is_asset(f) && !assets_md.contains(&format!("`{f}`"))).cloned().collect()
+fn needs_attribution(path: &str) -> bool {
+    // Include code masters, native work, catalogs, metadata and licence texts in the collection.
+    if path.starts_with("assets/locales/pending/") {
+        return false;
+    }
+    if path.starts_with("assets/") {
+        return !path.ends_with(".md");
+    }
+    Path::new(path).extension().is_some_and(|ext| ASSET_EXT.contains(&ext.to_string_lossy().to_ascii_lowercase().as_str()))
+}
+
+fn missing<'a>(files: &'a [String], attribution: &str) -> Vec<&'a str> {
+    let rows: BTreeSet<_> =
+        attribution.lines().filter(|line| line.starts_with('|')).filter_map(|line| line.split('|').nth(1)).map(str::trim).collect();
+    files.iter().map(String::as_str).filter(|path| needs_attribution(path) && !rows.contains(path)).collect()
 }
 
 pub fn run(root: &Path) -> Result<(), String> {
-    let out = Command::new("git")
-        .current_dir(root)
-        .args(["ls-files", "--cached", "--others", "--exclude-standard"])
-        .output()
-        .map_err(|e| format!("git ls-files: {e}"))?;
-    let files: Vec<String> = String::from_utf8_lossy(&out.stdout).lines().filter(|l| root.join(l).exists()).map(str::to_owned).collect();
-    let md = std::fs::read_to_string(root.join("ATTRIBUTION.md")).map_err(|e| format!("ATTRIBUTION.md: {e}"))?;
-    let miss = missing(&files, &md);
-    if miss.is_empty() {
-        println!("assets: all {} asset files attributed in ATTRIBUTION.md", files.iter().filter(|f| is_asset(f)).count());
-        Ok(())
-    } else {
-        Err(format!("{} asset file(s) lack an ATTRIBUTION.md entry (author, source, licence):\n  {}", miss.len(), miss.join("\n  ")))
+    let mut attribution = std::fs::read_to_string(root.join("ATTRIBUTION.md")).map_err(|e| format!("ATTRIBUTION.md: {e}"))?;
+    // Rows still pending (attribution/pending/*.md) count: they are folded on main.
+    for (_, row) in crate::pending::attribution_rows(root)? {
+        attribution.push('\n');
+        attribution.push_str(&row);
     }
+    let mut files = Vec::new();
+    walk(root, root, &mut files)?;
+    files.sort();
+    let missing = missing(&files, &attribution);
+    if !missing.is_empty() {
+        return Err(format!("assets missing attribution rows:\n{}", missing.iter().map(|path| format!("  {path}")).collect::<Vec<_>>().join("\n")));
+    }
+    crate::render_assets::run(root, &files, &attribution)?;
+    println!("assets: {} files, all attributed", files.iter().filter(|path| needs_attribution(path)).count());
+    Ok(())
 }
 
 #[cfg(test)]
@@ -45,11 +97,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn detects_unattributed_assets() {
-        let files = vec!["assets/icons/a.svg".to_string(), "crates/x/src/lib.rs".into(), "docs/images/b.png".into(), "tests/fixture.png".into()];
-        let md = "| `assets/icons/a.svg` | me | here | MIT |";
-        assert_eq!(missing(&files, md), vec!["docs/images/b.png".to_string(), "tests/fixture.png".into()]);
-        assert!(!is_asset("crates/x/src/lib.rs"));
-        assert!(is_asset("assets/fonts/OFL.txt"));
+    fn collected_code_native_work_and_metadata_require_rows() {
+        for path in
+            ["assets/icons/source/icon.rs", "assets/work/project.ai", "assets/fonts/OFL.txt", "assets/locales/en.json", "assets/macos/Assets.car"]
+        {
+            assert!(needs_attribution(path), "{path}");
+        }
+        assert!(needs_attribution("docs/screenshot.png"));
+        assert!(needs_attribution("design/project.vectorcraft"));
+        assert!(!needs_attribution("assets/README.md"));
+        assert!(!needs_attribution("crates/ui/src/widget.rs"));
+    }
+
+    #[test]
+    fn incidental_mentions_do_not_replace_attribution_rows() {
+        let files = ["assets/source.svg".to_string(), "assets/README.md".to_string()];
+        assert_eq!(missing(&files, "Mention assets/source.svg"), ["assets/source.svg"]);
+        assert!(missing(&files, "| assets/source.svg | author | original | MIT |\n").is_empty());
     }
 }

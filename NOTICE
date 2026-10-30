@@ -1,50 +1,36 @@
-CADCraft
-Copyright (c) 2026 ArtCraft Team and the CADCraft contributors.
+SolidCraft
+Copyright (c) 2026 SolidCraft contributors.
 Licensed under the MIT License or the Apache License, Version 2.0, at your option
 (LICENSE-MIT, LICENSE-APACHE).
 
-The ArtCraft name, wordmark and logos in docs/brand/ are trademarks of the ArtCraft Team. They are
-not open source and are not covered by the license above; their terms are in
-docs/brand/LICENSE-brand.txt.
-
 Third-party material
 
-Software dependencies are listed in Cargo.lock. One is under a weak-copyleft licence: the acadrust
-crate (DWG reading and writing, https://github.com/hakanaktt/acadrust) is licensed under the
-Mozilla Public License 2.0 and is used unmodified as a separate library (crates/dwg). Its source
-is available from crates.io and the repository above.
+Software dependencies are listed in Cargo.lock; their licences are in THIRD-PARTY-LICENSES.txt
+(`cargo xtask licences`), which the programs also carry (Help > About > Licences,
+`solidcraft-cli licences`). The geometry kernel builds on the truck crates
+(truck-modeling, truck-shapeops, truck-meshalgo, truck-stepio, truck-topology and their
+dependencies, https://github.com/ricosjp/truck), licensed under the Apache License 2.0 and used
+as libraries. truck-shapeops 0.4.0 is vendored in vendor/truck-shapeops with SolidCraft
+modifications (listed in vendor/README.md and marked in the source); its licence is in
+vendor/truck-shapeops/LICENSE. Copyright (c) RICOS Co. Ltd.
 
+Some code is adapted from sibling projects in the storytold family (CADCraft, GridCraft), which are
+licensed MIT OR Apache-2.0; ATTRIBUTION.md lists the files.
+The release packaging (.github/workflows/release.yml, packaging/) is adapted from PhotoCraft
+(https://github.com/storytold/photocraft), licensed under the Apache License 2.0.
 
-CADCraft's icons, drafting font, hatch patterns and linetypes are drawn or defined in code.
-The UI also bundles the egui font inputs described below. The per-file list is in ATTRIBUTION.md.
-Builds made with the optional craft-fonts input (CRAFT_FONTS_DIR) embed the fonts listed in its
-ATTRIBUTION.md, each under the SIL Open Font License 1.1.
+The incremental Radiance RGBE row adapter in crates/render/src/lighting/hdr.rs adapts
+decoding state machines from image 0.25.10 (https://github.com/image-rs/image),
+MIT OR Apache-2.0. ATTRIBUTION.md describes the bounded/cancellable changes; the
+original licence texts are included in THIRD-PARTY-LICENSES.txt.
 
-CADCraft is an independent project and is not affiliated with, sponsored by or endorsed by
-Autodesk, Inc. AutoCAD and DWG are trademarks of Autodesk, Inc.
+Most bundled assets are drawn in code or contributed originally; third-party fonts (Liberation Sans
+for sketch text, BIZ UDPGothic for web Japanese display) are licensed under SIL OFL 1.1. The
+per-file list is in ATTRIBUTION.md.
 
-
-The PDF writer in the pinned craft-pdf 0.1.0 / Krilla 0.8.2 dependency embeds four Compact ICC
-Profiles by Clinton Ingram, under CC0-1.0. They are unmodified dependency assets; no profile file
-is copied into this repository. Per-file sources and SHA-256 hashes are in ATTRIBUTION.md.
-Source: https://github.com/LaurenzV/krilla/tree/3ffdf0588cf98050aad6edba51ca70162e1fb5b5/crates/krilla/icc
-(pinned through https://github.com/storytold/craft-libs/tree/9f89fe8f6d72ab4db4cc06f186381a6a254463ab/vendor/krilla/icc).
-CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/
-Pinned licence text: https://github.com/storytold/craft-libs/blob/9f89fe8f6d72ab4db4cc06f186381a6a254463ab/vendor/krilla/icc/LICENSE
-
-The UI's egui-icons.ttf subset and emoji-icon-font.ttf fallback are provided by epaint_default_fonts
-and registered through egui's default font definitions. They derive from emoji-icon-font by
-John Slegers, under the MIT License. The subset and full face share the following upstream notice.
-Source: https://github.com/storytold/egui/tree/6d518fc799681571963842f95b55a6b68431b15a/crates/epaint_default_fonts/fonts
-Original: https://github.com/jslegers/emoji-icon-font
-The following text is reproduced verbatim from emoji-icon-font-mit-license.txt:
-
-MIT License
-
-Copyright (c) 2014 John Slegers
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+SolidCraft is an independent project and is not affiliated with, sponsored by or endorsed by
+Autodesk, Dassault Systèmes, PTC, Siemens, Blender or any other CAD vendor. Fusion, AutoCAD,
+Inventor, Alias and Tinkercad are trademarks of Autodesk, Inc.; SolidWorks is a trademark of
+Dassault Systèmes; Onshape and Creo are trademarks of PTC; Blender is a trademark of the Blender
+Foundation. Product names appear only to describe compatibility, such as the mouse navigation
+presets in Preferences › Navigation and file formats from public specifications.

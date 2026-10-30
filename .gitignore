@@ -1,11 +1,17 @@
-*~
-/target
+/target*/
 /plan/
-/plans/
 /dist/
-/log/
-/temp/
+*~
 .DS_Store
 *.swp
-/apps/cadcraft-web/dist/
 /.claude/worktrees/
+/target-snapshot
+__pycache__/
+.vscode/
+
+# cargo-mutants output (docs/mutation-testing.md)
+mutants.out*/
+
+# external corpus downloads (cargo xtask external-corpus, #1397): fetched at test time,
+# hash-pinned in tests/external-corpus.toml; never commit case data
+/corpus/
