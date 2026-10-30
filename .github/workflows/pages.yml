@@ -68,6 +68,8 @@ jobs:
           bash docs/book/seo.sh site  # canonical links, robots.txt, sitemap.xml
           cp -r dist/web site/app
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
         id: pages
       - name: Install Flatpak repository tools
         run: |
