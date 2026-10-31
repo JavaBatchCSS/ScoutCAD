@@ -1,4 +1,4 @@
-//! SolidCraft in the browser.
+//! ScoutCAD in the browser.
 //!
 //! Runs the same [`solidcraft_ui_egui::SolveApp`] as the desktop app through eframe's web runner
 //! (wgpu: WebGPU where available, WebGL2 otherwise). Build with `trunk build --release` from this
@@ -962,6 +962,7 @@ mod web {
                         solidcraft_ui_egui::gpu::install_cpu_picture_renderer();
                         let (sender, receiver) = std::sync::mpsc::channel();
                         let mut app = SolveApp::new(Session::default(), services).with_control(receiver);
+                        app.preferences.language = "fr".into();
                         app.embedded = launch.embed;
                         // Listening before reading: settings another tab writes from now on are
                         // newer than those read here.
