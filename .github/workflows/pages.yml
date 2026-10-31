@@ -1,20 +1,9 @@
-# The documentation site on GitHub Pages: the book (docs/book) at https://docs.solidcraft.io/
-# and the bundled web app at /app/. Needs Settings → Pages → Source = GitHub Actions; skipped while the
-# repository is private.
-name: Pages
+name: Deploy SolidCraft web app to Pages
 
 on:
   push:
     branches: [main]
-    # The site is the book and the web app: test data and the GitHub bots' scripts change neither.
-    paths-ignore: ["tests/**", "scripts/claim/**", "scripts/triage/**"]
   workflow_dispatch:
-    inputs:
-      release_tag:
-        description: "Published release for Flatpak (empty: latest stable release)"
-        type: string
-        required: false
-        default: ""
 
 permissions:
   contents: read
@@ -27,7 +16,6 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  MDBOOK_VERSION: v0.5.4
   TRUNK_VERSION: v0.21.14
 
 jobs:
@@ -40,49 +28,21 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - name: Install mdbook and trunk
+      - name: Install Trunk
         run: |
           mkdir -p "$HOME/.local/bin"
-          curl -sSL "https://github.com/rust-lang/mdBook/releases/download/${MDBOOK_VERSION}/mdbook-${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar -xz -C "$HOME/.local/bin"
-          curl -sSL "https://github.com/trunk-rs/trunk/releases/download/${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" | tar -xz -C "$HOME/.local/bin"
+          curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Install a software Vulkan driver (lavapipe)
-        # The book's pictures are `solidcraft-cli snapshot`s, drawn on the GPU; the runner has none.
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
-      - name: Build the book
-        env:
-          SOLIDCRAFT_GPU: software
-        run: cargo xtask book
       - name: Build the web app
         working-directory: apps/solidcraft-web
         run: trunk build --release --public-url ./
-      - name: Test the web app offline and across an update (headless Chrome)
-        run: cargo xtask web-offline-test --site dist/web
-      - name: Assemble the site
-        run: |
-          mkdir -p site
-          cp -r target/book/. site/
-          bash docs/book/seo.sh site  # canonical links, robots.txt, sitemap.xml
-          cp -r dist/web site/app
       - uses: actions/configure-pages@v5
         with:
           enablement: true
-        id: pages
-      - name: Install Flatpak repository tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends flatpak ostree
-      - name: Include the published Flatpak repository
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag || '' }}
-          PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
-        run: bash packaging/flatpak-site.sh site
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: dist/web
 
   deploy:
     needs: build
