@@ -1,6 +1,6 @@
 [package]
-name = "cadcraft-mcp"
-description = "CADCraft MCP server: JSON-RPC 2.0 over stdio, driving a running app or a headless session"
+name = "solidcraft-mcp"
+description = "SolidCraft MCP server: JSON-RPC 2.0 over stdio, driving a headless session or the running app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,11 +9,9 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-cadcraft-engine = { workspace = true }
-cadcraft-render = { workspace = true }
-cadcraft-io = { workspace = true }
-clap = { workspace = true }
+solidcraft-engine = { workspace = true }
 serde_json = { workspace = true }
-log = { workspace = true }
-# Secure randomness for the per-session control token (MIT OR Apache-2.0).
-getrandom = "0.4"
+
+[dev-dependencies]
+# The renderer `solidcraft-cli mcp` installs, so the tests' screenshots are drawn as the server's.
+solidcraft-gpu = { workspace = true }
