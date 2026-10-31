@@ -30,13 +30,14 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream "$UPSTREAM_REPOSITORY"
           git fetch upstream main
-          branch="sync/solidcraft-$(date -u +%Y%m%d)"
+          branch="sync/solidcraft-${{ github.run_id }}"
           git switch -c "$branch"
           cp .github/workflows/pages.yml /tmp/pages.yml
           git merge --allow-unrelated-histories -X theirs upstream/main -m "Sync SolidCraft upstream"
           cp /tmp/pages.yml .github/workflows/pages.yml
           perl -0pi -e 's/SolidCraft/ScoutCAD/g; s/<html lang="en">/<html lang="fr">/g' apps/solidcraft-web/index.html apps/solidcraft-web/src/main.rs
           perl -0pi -e 's/let mut app = SolveApp::new\(Session::default\(\), services\)\.with_control\(receiver\);/let mut app = SolveApp::new(Session::default(), services).with_control(receiver);\n                        app.preferences.language = "fr".into();/g' apps/solidcraft-web/src/main.rs
+          grep -q 'app.preferences.language = "fr"' apps/solidcraft-web/src/main.rs
           git add -A
           git diff --cached --quiet && exit 0
           git commit -m "Sync SolidCraft upstream updates"
