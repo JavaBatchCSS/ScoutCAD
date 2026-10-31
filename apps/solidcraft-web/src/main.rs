@@ -15,6 +15,8 @@ mod easyprint;
 #[cfg(target_arch = "wasm32")]
 mod files;
 #[cfg(target_arch = "wasm32")]
+mod github;
+#[cfg(target_arch = "wasm32")]
 mod install;
 #[cfg(target_arch = "wasm32")]
 mod linked;
@@ -791,6 +793,9 @@ mod web {
             // First: a language another tab chose fetches its font this frame.
             self.load_other_tabs_prefs();
             self.tick_font(ctx);
+            for (name, bytes) in crate::github::drain() {
+                self.files.arrive(name, bytes, files::Intent::Open);
+            }
             self.app.logic(ctx);
             self.api.poll();
             self.space_mouse.logic(&mut self.app, ctx);
@@ -887,6 +892,7 @@ mod web {
     }
 
     pub fn start() {
+        crate::github::install();
         eframe::WebLogger::init(log::LevelFilter::Info).ok();
         wasm_bindgen_futures::spawn_local(async {
             let Some(window) = web_sys::window() else { return };
