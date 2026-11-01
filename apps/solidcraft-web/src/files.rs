@@ -354,7 +354,6 @@ pub fn flush(files: &Rc<Files>) {
 
 /// Hand `bytes` to the user as a download named `name`.
 pub fn download(name: &str, bytes: &[u8]) -> Result<(), String> {
-    crate::github::offer(name, "application/octet-stream", bytes);
     let doc = web_sys::window().and_then(|w| w.document()).ok_or("no document")?;
     let parts = Array::new();
     parts.push(&Uint8Array::from(bytes));
