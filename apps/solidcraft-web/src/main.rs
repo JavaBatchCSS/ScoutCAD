@@ -1,4 +1,4 @@
-//! SolidCraft in the browser.
+//! ScoutCAD in the browser.
 //!
 //! Runs the same [`solidcraft_ui_egui::SolveApp`] as the desktop app through eframe's web runner
 //! (wgpu: WebGPU where available, WebGL2 otherwise). Build with `trunk build --release` from this
@@ -14,6 +14,8 @@ mod disk;
 mod easyprint;
 #[cfg(target_arch = "wasm32")]
 mod files;
+#[cfg(target_arch = "wasm32")]
+mod github;
 #[cfg(target_arch = "wasm32")]
 mod install;
 #[cfg(target_arch = "wasm32")]
@@ -791,6 +793,9 @@ mod web {
             // First: a language another tab chose fetches its font this frame.
             self.load_other_tabs_prefs();
             self.tick_font(ctx);
+            for (name, bytes) in crate::github::drain() {
+                self.files.arrive(name, bytes, files::Intent::Open);
+            }
             self.app.logic(ctx);
             self.api.poll();
             self.space_mouse.logic(&mut self.app, ctx);
@@ -887,6 +892,7 @@ mod web {
     }
 
     pub fn start() {
+        crate::github::install();
         eframe::WebLogger::init(log::LevelFilter::Info).ok();
         wasm_bindgen_futures::spawn_local(async {
             let Some(window) = web_sys::window() else { return };
@@ -962,6 +968,7 @@ mod web {
                         solidcraft_ui_egui::gpu::install_cpu_picture_renderer();
                         let (sender, receiver) = std::sync::mpsc::channel();
                         let mut app = SolveApp::new(Session::default(), services).with_control(receiver);
+                        app.preferences.language = "fr".into();
                         app.embedded = launch.embed;
                         // Listening before reading: settings another tab writes from now on are
                         // newer than those read here.
